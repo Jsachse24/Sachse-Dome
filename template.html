@@ -679,8 +679,8 @@ tr.tier-break td:first-child::before {
       <span><kbd>M</kbd> My Pick</span>
       <span><kbd>X</kbd> Taken</span>
       <span><kbd>U</kbd> Undo</span>
+      <span><kbd>R</kbd> Report</span>
       <span><kbd>/</kbd> Search</span>
-      <span><kbd>Esc</kbd> Clear</span>
     </div>
   </div>
 
@@ -744,6 +744,7 @@ tr.tier-break td:first-child::before {
         <button class="tab-btn active" onclick="switchTab('my-team')">My Team</button>
         <button class="tab-btn" onclick="switchTab('draft-log')">Draft Log</button>
         <button class="tab-btn" onclick="switchTab('player-info')">Player Info</button>
+        <button class="tab-btn" onclick="switchTab('report')">Report</button>
       </div>
 
       <!-- Tab: My Team -->
@@ -811,6 +812,30 @@ tr.tier-break td:first-child::before {
       <div class="tab-content" id="tab-player-info">
         <div class="player-detail" id="player-detail">
           <div style="color: var(--text-dim);">Click a player to see details</div>
+        </div>
+      </div>
+
+      <!-- Tab: Report -->
+      <div class="tab-content" id="tab-report">
+        <div style="padding:14px">
+          <div id="report-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <div style="font-size:14px;font-weight:700;color:var(--accent)">Player Analytics Report</div>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-sm" id="btn-fetch-data" onclick="fetchAdvancedData()" disabled>Fetch Data</button>
+              <button class="btn btn-primary btn-sm" id="btn-generate-report" onclick="generateReport()" disabled>Generate Report</button>
+            </div>
+          </div>
+          <div id="report-status" style="font-size:12px;color:var(--text-dim);margin-bottom:8px"></div>
+          <div id="report-content" style="max-height:calc(100vh - 280px);overflow-y:auto">
+            <div style="color:var(--text-dim);font-size:12px;text-align:center;padding:20px 0">
+              Select a player and click "Fetch Data" to load advanced metrics,<br>
+              then "Generate Report" for a full AI-powered analysis.<br><br>
+              <span style="font-size:11px;color:var(--text-dim)">
+                Requires: <code style="background:var(--surface2);padding:1px 4px;border-radius:3px">python main.py serve</code> running locally
+                <br>and <code style="background:var(--surface2);padding:1px 4px;border-radius:3px">ANTHROPIC_API_KEY</code> set for AI reports
+              </span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -1680,6 +1705,11 @@ function renderPlayerDetail(player) {
     </div>
 
     <div style="margin-top:12px">${actionBtn}</div>
+    <div style="margin-top:8px">
+      <button class="btn" style="width:100%;border-color:var(--purple);color:var(--purple)" onclick="switchTab('report');generateReport()">
+        Generate Analytics Report
+      </button>
+    </div>
   `;
 }
 
@@ -1719,7 +1749,8 @@ function selectPlayer(id) {
   state.selectedPlayerId = id;
   const player = state.players.find(p => p.id === id);
   renderPlayerDetail(player);
-  if (state.activeTab !== 'my-team') switchTab('player-info');
+  updateReportButtons();
+  if (state.activeTab !== 'my-team' && state.activeTab !== 'report') switchTab('player-info');
 
   document.querySelectorAll('#player-tbody tr').forEach(tr => tr.classList.remove('selected'));
   if (event && event.currentTarget) event.currentTarget.classList.add('selected');
@@ -1836,6 +1867,11 @@ function setupKeyboardShortcuts() {
       case '1': switchTab('my-team'); break;
       case '2': switchTab('draft-log'); break;
       case '3': switchTab('player-info'); break;
+      case '4': switchTab('report'); break;
+      case 'r':
+        e.preventDefault();
+        if (state.selectedPlayerId) { switchTab('report'); generateReport(); }
+        break;
     }
   });
 }
@@ -1988,6 +2024,157 @@ function toast(message, type = 'info') {
   div.textContent = message;
   container.appendChild(div);
   setTimeout(() => div.remove(), 3000);
+}
+
+// ============================================================
+// ANALYTICS REPORT
+// ============================================================
+const API_BASE = 'http://127.0.0.1:8000';
+let reportPlayerCache = {}; // {player_id: {advanced: ..., report: ...}}
+
+function updateReportButtons() {
+  const fetchBtn = document.getElementById('btn-fetch-data');
+  const reportBtn = document.getElementById('btn-generate-report');
+  if (state.selectedPlayerId) {
+    fetchBtn.disabled = false;
+    reportBtn.disabled = false;
+  } else {
+    fetchBtn.disabled = true;
+    reportBtn.disabled = true;
+  }
+}
+
+async function fetchAdvancedData() {
+  if (!state.selectedPlayerId) { toast('Select a player first', 'warning'); return; }
+  const pid = state.selectedPlayerId;
+  const player = state.players.find(p => p.id === pid);
+  if (!player) return;
+
+  const statusEl = document.getElementById('report-status');
+  const contentEl = document.getElementById('report-content');
+  statusEl.textContent = `Fetching advanced stats for ${player.name}...`;
+  statusEl.style.color = 'var(--accent)';
+  contentEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-dim)"><div style="font-size:24px;animation:pulse 1s infinite">Loading...</div><div style="font-size:11px;margin-top:4px">Scraping Basketball Reference, BBall Index, Dunks & Threes...</div></div>';
+
+  try {
+    const resp = await fetch(`${API_BASE}/api/fetch-advanced/${pid}`, {method: 'POST'});
+    if (!resp.ok) throw new Error(`Server returned ${resp.status}`);
+    const data = await resp.json();
+
+    reportPlayerCache[pid] = { advanced: data.sources };
+
+    // Render the raw data
+    let html = `<div style="font-size:14px;font-weight:700;color:var(--accent);margin:8px 0;border-bottom:1px solid var(--border);padding-bottom:4px">ADVANCED METRICS — ${player.name}</div>`;
+    html += renderAdvancedTable(data.sources);
+    if (data.errors && data.errors.length > 0) {
+      html += `<div style="color:var(--orange);font-size:11px;margin-top:8px">Warnings: ${data.errors.join(', ')}</div>`;
+    }
+    html += '<div style="margin-top:12px;text-align:center"><button class="btn btn-primary" onclick="generateReport()">Generate Full AI Report</button></div>';
+
+    contentEl.innerHTML = html;
+    statusEl.textContent = `Data fetched for ${player.name}`;
+    statusEl.style.color = 'var(--green)';
+    toast(`Advanced data loaded for ${player.name}`, 'success');
+  } catch (e) {
+    statusEl.textContent = `Error: ${e.message}`;
+    statusEl.style.color = 'var(--red)';
+    contentEl.innerHTML = `<div style="color:var(--red);padding:12px;font-size:13px">
+      <strong>Could not connect to analytics server.</strong><br><br>
+      Make sure the server is running:<br>
+      <code style="background:var(--surface2);padding:2px 6px;border-radius:3px">python main.py serve</code><br><br>
+      <span style="color:var(--text-dim);font-size:12px">Error: ${e.message}</span>
+    </div>`;
+  }
+}
+
+async function generateReport() {
+  if (!state.selectedPlayerId) { toast('Select a player first', 'warning'); return; }
+  const pid = state.selectedPlayerId;
+  const player = state.players.find(p => p.id === pid);
+  if (!player) return;
+
+  const statusEl = document.getElementById('report-status');
+  const contentEl = document.getElementById('report-content');
+  statusEl.textContent = `Generating report for ${player.name}...`;
+  statusEl.style.color = 'var(--accent)';
+  contentEl.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text-dim)"><div style="font-size:24px;animation:pulse 1s infinite">Analyzing...</div><div style="font-size:11px;margin-top:4px">Fetching data, searching analyst content, generating AI report...</div><div style="font-size:11px;margin-top:2px;color:var(--text-dim)">This may take 15-30 seconds</div></div>';
+
+  // Switch to report tab
+  switchTab('report');
+
+  try {
+    const resp = await fetch(`${API_BASE}/api/report/${pid}`, {method: 'POST'});
+    if (!resp.ok) throw new Error(`Server returned ${resp.status}`);
+    const data = await resp.json();
+
+    if (data.error) {
+      statusEl.textContent = `Report generated (${data.error})`;
+      statusEl.style.color = 'var(--orange)';
+    } else {
+      statusEl.textContent = `Report generated for ${player.name}`;
+      statusEl.style.color = 'var(--green)';
+    }
+
+    contentEl.innerHTML = data.html;
+    reportPlayerCache[pid] = { ...reportPlayerCache[pid], report: data };
+    toast(`Report ready for ${player.name}`, 'success');
+  } catch (e) {
+    statusEl.textContent = `Error: ${e.message}`;
+    statusEl.style.color = 'var(--red)';
+    contentEl.innerHTML = `<div style="color:var(--red);padding:12px;font-size:13px">
+      <strong>Could not generate report.</strong><br><br>
+      Requirements:<br>
+      1. Server running: <code style="background:var(--surface2);padding:2px 6px;border-radius:3px">python main.py serve</code><br>
+      2. API key set: <code style="background:var(--surface2);padding:2px 6px;border-radius:3px">export ANTHROPIC_API_KEY=your_key</code><br><br>
+      <span style="color:var(--text-dim);font-size:12px">Error: ${e.message}</span>
+    </div>`;
+  }
+}
+
+function renderAdvancedTable(sources) {
+  let rows = [];
+  const bbref = sources?.bbref || {};
+  const bi = sources?.bball_index || {};
+  const dt = sources?.dunks_threes || {};
+
+  const addRow = (label, value, source) => {
+    if (value != null) {
+      const v = typeof value === 'number' ? value.toFixed(3).replace(/\.?0+$/, '') : value;
+      rows.push(`<tr><td style="padding:4px 8px;border-bottom:1px solid var(--border);color:var(--text-dim);font-size:12px">${label}</td><td style="padding:4px 8px;border-bottom:1px solid var(--border);font-size:12px">${v}</td><td style="padding:4px 8px;border-bottom:1px solid var(--border);color:var(--text-dim);font-size:10px">${source}</td></tr>`);
+    }
+  };
+
+  addRow('BPM', bbref.bpm, 'BBRef');
+  addRow('VORP', bbref.vorp, 'BBRef');
+  addRow('TS%', bbref.ts_pct, 'BBRef');
+  addRow('USG%', bbref.usg_pct, 'BBRef');
+  addRow('Playoff BPM', bbref.playoff_bpm, 'BBRef');
+  addRow('BPM Delta (PO-RS)', bbref.bpm_delta, 'BBRef');
+  addRow('TS% Delta (PO-RS)', bbref.ts_delta, 'BBRef');
+  addRow('LEBRON', bi.lebron, 'BBI');
+  addRow('O-LEBRON', bi.o_lebron, 'BBI');
+  addRow('D-LEBRON', bi.d_lebron, 'BBI');
+  addRow('Shot Making', bi.shot_making, 'BBI');
+  addRow('EPM', dt.epm, 'D&T');
+  addRow('O-EPM', dt.o_epm, 'D&T');
+  addRow('D-EPM', dt.d_epm, 'D&T');
+  addRow('Wins Added', dt.wins_added, 'D&T');
+
+  if (rows.length === 0) return '<div style="color:var(--text-dim);font-size:12px;padding:8px">No metrics retrieved. Sources may be unavailable.</div>';
+
+  return `<table style="border-collapse:collapse;width:100%;font-size:12px;margin:8px 0">
+    <tr><th style="background:var(--surface2);color:var(--text-dim);padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);font-size:11px">Metric</th>
+    <th style="background:var(--surface2);color:var(--text-dim);padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);font-size:11px">Value</th>
+    <th style="background:var(--surface2);color:var(--text-dim);padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);font-size:11px">Source</th></tr>
+    ${rows.join('')}</table>`;
+}
+
+// Add pulse animation
+if (!document.getElementById('pulse-style')) {
+  const style = document.createElement('style');
+  style.id = 'pulse-style';
+  style.textContent = '@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }';
+  document.head.appendChild(style);
 }
 
 // ============================================================

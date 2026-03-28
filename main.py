@@ -2,12 +2,14 @@
 """NBA Playoff Fantasy Draft Tool.
 
 Usage:
-    python main.py fetch        - Fetch and cache all player/odds data (~8 min first run)
-    python main.py html         - Generate draft_board.html (open in browser)
-    python main.py html --pos N - Set your draft position in the HTML (1-10)
-    python main.py draft        - Launch terminal draft UI
-    python main.py rankings     - Print ranked player board to terminal
-    python main.py clear-cache  - Wipe cached data
+    python main.py fetch           - Fetch and cache all player/odds data (~8 min first run)
+    python main.py fetch-advanced  - Fetch advanced analytics (BBRef, BBall Index, D&T)
+    python main.py html            - Generate draft_board.html (open in browser)
+    python main.py html --pos N    - Set your draft position in the HTML (1-10)
+    python main.py serve           - Start local server with on-demand reports (port 8000)
+    python main.py draft           - Launch terminal draft UI
+    python main.py rankings        - Print ranked player board to terminal
+    python main.py clear-cache     - Wipe all cached data
 """
 
 import sys
@@ -110,6 +112,37 @@ def build_pool():
     )
 
     return players
+
+
+def fetch_advanced():
+    """Fetch advanced analytics for all players in the pool."""
+    from data.basketball_ref import get_advanced_stats_bulk
+    from data.bball_index import get_lebron_ratings_bulk
+    from data.dunks_threes import get_epm_data_bulk
+
+    players = build_pool()
+    player_dicts = [{"name": p.name, "id": p.player_id, "team": p.team} for p in players[:80]]
+
+    print("=" * 60)
+    print("Fetching Advanced Analytics")
+    print("=" * 60)
+
+    print(f"\nFetching Basketball Reference stats for {len(player_dicts)} players...")
+    bbref = get_advanced_stats_bulk(player_dicts)
+    print(f"  Got data for {sum(1 for v in bbref.values() if v.get('bpm') is not None)} players")
+
+    print(f"\nFetching BBall Index LEBRON ratings...")
+    bball = get_lebron_ratings_bulk(player_dicts)
+    print(f"  Got data for {sum(1 for v in bball.values() if v.get('lebron') is not None)} players")
+
+    print(f"\nFetching Dunks & Threes EPM data...")
+    dt = get_epm_data_bulk(player_dicts)
+    print(f"  Got data for {sum(1 for v in dt.values() if v.get('epm') is not None)} players")
+
+    print("\n" + "=" * 60)
+    print("Advanced analytics fetch complete!")
+    print("Run 'python main.py serve' to use on-demand reports.")
+    print("=" * 60)
 
 
 def print_rankings():
@@ -263,16 +296,23 @@ def main():
 
     if cmd == "fetch":
         fetch_all()
+    elif cmd == "fetch-advanced":
+        fetch_advanced()
     elif cmd == "html":
         generate_html(draft_pos)
     elif cmd == "rankings":
         print_rankings()
     elif cmd == "draft":
         run_draft(draft_pos)
+    elif cmd == "serve":
+        from server import main as serve_main
+        serve_main()
     elif cmd == "clear-cache":
         from data.cache import invalidate_all
+        from data.analytics_cache import clear_all as clear_analytics
         invalidate_all()
-        print("Cache cleared.")
+        clear_analytics()
+        print("All caches cleared.")
     else:
         print(__doc__)
 
