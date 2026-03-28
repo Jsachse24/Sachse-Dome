@@ -1641,6 +1641,11 @@ function renderPlayerDetail(player) {
       <div class="stat-box"><div class="stat-value">${player.ast.toFixed(1)}</div><div class="stat-label">AST/G</div></div>
     </div>
     <div class="stat-grid">
+      <div class="stat-box"><div class="stat-value">${(player.stl || 0).toFixed(1)}</div><div class="stat-label">STL/G</div></div>
+      <div class="stat-box"><div class="stat-value">${(player.blk || 0).toFixed(1)}</div><div class="stat-label">BLK/G</div></div>
+      <div class="stat-box"><div class="stat-value">${(player.threes || 0).toFixed(1)}</div><div class="stat-label">3PM/G</div></div>
+    </div>
+    <div class="stat-grid">
       <div class="stat-box"><div class="stat-value">${player.min.toFixed(1)}</div><div class="stat-label">MIN/G</div></div>
       <div class="stat-box"><div class="stat-value">${player.games_played}</div><div class="stat-label">GP</div></div>
       <div class="stat-box"><div class="stat-value">${(player.usg_pct * 100).toFixed(1)}%</div><div class="stat-label">USG%</div></div>
