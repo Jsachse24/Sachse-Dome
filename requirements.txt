@@ -1,0 +1,4 @@
+nba_api>=1.4
+textual>=0.50.0
+httpx>=0.28.0
+pandas>=2.0.0

@@ -1,0 +1,86 @@
+Screen {
+    layout: horizontal;
+}
+
+#left-panel {
+    width: 2fr;
+    height: 100%;
+}
+
+#right-panel {
+    width: 1fr;
+    height: 100%;
+    border-left: solid $accent;
+}
+
+#player-table {
+    height: 1fr;
+}
+
+#search-box {
+    dock: bottom;
+    height: 3;
+    padding: 0 1;
+}
+
+#status-bar {
+    dock: bottom;
+    height: 1;
+    background: $accent;
+    color: $text;
+    padding: 0 1;
+}
+
+#draft-tracker {
+    height: 1fr;
+    border-bottom: solid $accent;
+    overflow-y: auto;
+}
+
+#player-detail {
+    height: auto;
+    max-height: 16;
+    padding: 1;
+}
+
+.tier-elite {
+    color: #00ff00;
+}
+
+.tier-strong {
+    color: #00ccff;
+}
+
+.tier-solid {
+    color: #ffff00;
+}
+
+.tier-value {
+    color: #ff9900;
+}
+
+.tier-depth {
+    color: #888888;
+}
+
+.injury-questionable {
+    color: #ffff00;
+}
+
+.injury-doubtful {
+    color: #ff6600;
+}
+
+.injury-out {
+    color: #ff0000;
+}
+
+#draft-input {
+    dock: bottom;
+    height: 3;
+    padding: 0 1;
+}
+
+DataTable > .datatable--cursor {
+    background: $accent 40%;
+}
