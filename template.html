@@ -1624,7 +1624,7 @@ function renderPlayerDetail(player) {
 
   div.innerHTML = `
     <div class="player-name">${player.name}</div>
-    <div class="player-meta">${player.team} | ${player.position || 'N/A'} | Seed ${player.seed} ${player.conference}</div>
+    <div class="player-meta">${player.team} | ${player.position || 'N/A'} | Seed ${player.seed} ${player.conference}${player.adj_details.age ? ' | Age ' + player.adj_details.age : ''}</div>
 
     <div class="projection-box">
       <div class="proj-value">${player.projected.toFixed(0)}</div>
@@ -1649,6 +1649,9 @@ function renderPlayerDetail(player) {
     <div class="detail-section">
       <h4>Playoff Adjustment</h4>
       <div class="detail-row"><span class="label">Factor</span><span><strong>${player.adj.toFixed(3)}x</strong> (${adjMethod})</span></div>
+      ${player.adj_details.age ? `
+        <div class="detail-row"><span class="label">Age Factor</span><span>${player.adj_details.age_factor?.toFixed(2) || '1.00'}x (age ${player.adj_details.age})</span></div>
+      ` : ''}
       ${player.adj_details.playoff_fantasy != null ? `
         <div class="detail-row"><span class="label">Career PO Fantasy/G</span><span>${player.adj_details.playoff_fantasy}</span></div>
         <div class="detail-row"><span class="label">Career RS Fantasy/G</span><span>${player.adj_details.reg_fantasy}</span></div>
